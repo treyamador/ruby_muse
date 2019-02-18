@@ -2,9 +2,10 @@
   <div class="jumbotron">
     <div class="container">
       <h1>Welcome!</h1>
-      <p>Register to get started.</p>
+      <p>Sign in or register to get started.</p>
       <p>
-        <%= link_to 'Register', new_user_registration_path, class: 'btn btn-primary btn-lg' %>
+        <%= link_to 'Register', new_user_registration_path, class: 'btn btn-primary' %>
+        <%= link_to 'Sign in', new_user_session_path, class: 'btn' %>
       </p>
     </div>
   </div>
