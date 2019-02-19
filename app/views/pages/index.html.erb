@@ -2,6 +2,7 @@
 <div>
   <% if user_signed_in? %>
     <div> Hello, <%= current_user.first_name %>! </div>
+    <%= link_to 'Sign out', destroy_user_session_path, method: :delete %>
     <%= link_to 'Make a new post!', new_posting_path %>
     <%= render partial: "postings/posting", collection: @postings, as: :posting %>
   <% else %>

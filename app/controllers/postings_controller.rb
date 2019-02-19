@@ -20,12 +20,11 @@ class PostingsController < ApplicationController
     @posting = Posting.new
   end
 
+  def show
+    @postings = current_user.postings
+  end
+
   def posting_params
     params.require(:posting).permit(:subject, :content)
   end
-
-  def show
-    # @postings = current_user.postings
-  end
-
 end
