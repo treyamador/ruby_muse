@@ -11,8 +11,7 @@ class PostingsController < ApplicationController
       flash[:success] = 'Post created!'
       redirect_to root_path
     else
-      # TODO add error message
-      render 'postings#new'
+      render 'new'
     end
   end
 
@@ -22,6 +21,30 @@ class PostingsController < ApplicationController
 
   def show
     @postings = current_user.postings
+  end
+
+  def edit
+    @posting = Posting.find(params[:id])
+  end
+
+  def update
+    @posting = Posting.find(params[:id])
+    if @posting.update_attributes(posting_params)
+      redirect_to postings_path
+    else
+      render 'edit'
+    end
+  end
+
+  def destroy
+    posting = Posting.find(params[:id]).destroy
+    if posting
+      flash[:success] = "Post '#{posting.subject}' destroyed."
+      redirect_to root_path
+    else
+      flash[:danger] = 'An error occured.'
+      render 'show'
+    end
   end
 
   def posting_params

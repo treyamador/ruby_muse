@@ -2,5 +2,12 @@
 <div class="well">
   <h3><%= posting.subject %></h3>
   <p><%= posting.content %></p>
-  <small><%= posting.created_at %></small>
+  
+  <div>
+    <small><%= link_to 'Edit', edit_posting_path(posting) %></small>
+    <small><%= link_to 'Delete', posting_path(posting), method: :delete %></small>
+  </div>
+  <div>
+    <small><%= posting.created_at %></small>
+  </div>
 </div>

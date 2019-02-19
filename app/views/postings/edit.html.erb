@@ -1,0 +1,16 @@
+
+<%= form_for @posting, method: :put do |f| %>
+
+  <div class="row">
+    <div class="col-md-6 col-offset-3" >
+      <%= f.label :subject %>
+      <%= f.text_field :subject, class: "form-control" %>
+
+      <%= f.label :content %>
+      <%= f.text_area :content, class: "form-control" %>
+
+      <%= f.submit "Update", class: "btn" %>
+    </div>
+  </div>
+
+<% end %>

@@ -1,0 +1,9 @@
+
+<% if @posting.errors.any? %>
+  <div class="alert alert-danger">
+    <h4> This post has <%= @posting.errors.count %> errors.</h4>
+    <% @posting.errors.full_messages.each do |msg| %>
+      <li><%= msg %></li>
+    <% end %>
+  </div>
+<% end %>
