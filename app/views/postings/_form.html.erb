@@ -9,8 +9,11 @@
       <%= f.label :content %>
       <%= f.text_area :content, class: "form-control" %>
 
-      <%= f.label :picture %>
-      <%= f.file_field :picture %>
+      <%#= f.label :picture %>
+      <%#= f.file_field :picture %>
+
+      <%= f.label :remote_picture_url %>
+      <%= f.text_field :remote_picture_url, class: "form-control" %>
 
       <%= f.submit button_text, class: "btn" %>
 

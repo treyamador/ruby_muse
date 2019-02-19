@@ -33,4 +33,10 @@ class PostingTest < ActiveSupport::TestCase
     @posting.content = 't' * 5001
     assert_not @posting.valid?
   end
+
+  test 'posting can accept url' do
+    @posting = postings(:one)
+    @posting.remote_picture_url = 'https://i.pinimg.com/originals/4c/46/2d/4c462d534c3865ea61e4caa96ea0b276.jpg'
+    assert @posting.valid?
+  end
 end

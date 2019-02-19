@@ -49,6 +49,6 @@ class PostingsController < ApplicationController
 
   def posting_params
     params.require(:posting)
-          .permit(:subject, :content, :picture)
+          .permit(:subject, :content, :remote_picture_url)
   end
 end
