@@ -3,6 +3,10 @@
   <h3><%= posting.subject %></h3>
   <p><%= posting.content %></p>
   
+  <div class="picture">
+    <%= image_tag posting.picture.url if posting.picture? %>
+  </div>
+
   <div>
     <small><%= link_to 'Edit', edit_posting_path(posting) %></small>
     <small><%= link_to 'Delete', posting_path(posting), method: :delete %></small>

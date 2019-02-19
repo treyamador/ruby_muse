@@ -1,22 +1,3 @@
 
 <div>Make a post!</div>
-
-<div class="row">
-
-  
-  <div class="col-md-6 col-offset-3">
-    <%= form_for @posting do |f| %>
-
-      <%= render 'errors' %>
-      
-      <%= f.label :subject %>
-      <%= f.text_field :subject, class: "form-control" %>
-
-      <%= f.label :content %>
-      <%= f.text_area :content, class: "form-control" %>
-
-      <%= f.submit "Post!", class: "btn" %>
-
-    <% end %>
-  </div>
-</div>
+<%= render 'form', button_text: 'Submit' %>

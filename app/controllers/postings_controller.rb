@@ -20,7 +20,7 @@ class PostingsController < ApplicationController
   end
 
   def show
-    @postings = current_user.postings
+    @postings = current_user.postings.order(created_at: :desc)
   end
 
   def edit
@@ -48,6 +48,7 @@ class PostingsController < ApplicationController
   end
 
   def posting_params
-    params.require(:posting).permit(:subject, :content)
+    params.require(:posting)
+          .permit(:subject, :content, :picture)
   end
 end
