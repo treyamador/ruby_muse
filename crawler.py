@@ -22,9 +22,21 @@ class Album:
             setattr(self, key, data[key].strip() if isinstance(data[key], str) else data[key])
 
 
-def writelog(msg):
-  with open('log.txt', 'at') as fobj:
-    fobj.write(msg+'\n')
+def writelog(*msg):
+    out = ' '.join(str(i) for i in msg)+'\n'
+    print(out)
+    with open('log.txt', 'at') as fobj:
+        fobj.write(out)
+
+
+def get_db():
+    db = mysql.connector.connect(user='root', passwd='root', database='Muse_development')
+    return db, db.cursor()
+
+
+def close_db(db, cursor):
+    db.close()
+    cursor.close()
 
 
 def get_http_headers():
@@ -43,13 +55,13 @@ def connect(url, max_errors=3, retry_time=10):
                                   headers=get_http_headers())
             res = request.urlopen(req, timeout=60)
             if res is not None:
-                print('  connected to', res.geturl())
+                writelog('  connected to', res.geturl())
                 return res
             else:
                 raise ValueError('Result is not a web page')
         except Exception as err:
             error_counter += 1
-            print('URL ERROR', url, err)
+            writelog('URL ERROR', url, err)
             time.sleep(retry_time)
 
 
@@ -76,9 +88,9 @@ def get_html(browser, url):
         browser.get(url)
         html = browser.page_source
     except Exception as err:
-        print('BROWSER ERROR', err)
+        writelog('BROWSER ERROR', err)
     else:
-        print('  connected to', url)
+        writelog('  connected to', url)
         return html
 
 
@@ -87,7 +99,7 @@ def select(tree, element):
         text = tree.select(element)[0].get_text()
     except Exception as err:
         text = ''
-        print('PARSE ERROR:', err)
+        writelog('PARSE ERROR:', err)
     return text
 
 
@@ -96,7 +108,7 @@ def select_attrib(tree, element, attrib):
         text = tree.select(element)[0][attrib]
     except Exception as err:
         text = ''
-        print('PARSE ERROR:', err)
+        writelog('PARSE ERROR:', err)
     return text
 
 
@@ -105,7 +117,7 @@ def select_list(tree, element):
         tags = [a.get_text() for a in tree.select(element)]
     except Exception as err:
         tags = []
-        print('PARSE ERROR:', err)
+        writelog('PARSE ERROR:', err)
     return tags
 
 
@@ -119,7 +131,7 @@ def parse(url, html):
             'album_cover': select_attrib(tree, '.album-cover img', 'src'),
             'album_artist_url': select_attrib(tree, '.album-artist a', 'href'),
             'critic_rating': select(tree, '.allmusic-rating'),
-            'user_rating_count': select(tree, '.average-user-rating-count'),
+            'user_rating_count': select(tree, '.average-user-rating-count').replace(',', ''),
             'user_rating': select_attrib(tree, '.average-user-rating', 'class')[-1].split('-')[-1],
             'release_date': select(tree, '.release-date span'),
             'duration': select(tree, '.duration span'),
@@ -127,48 +139,55 @@ def parse(url, html):
             'styles': select_list(tree, '.styles a')
         })
     except Exception as err:
-        print('PARSE ERROR:', err)
+        writelog('PARSE ERROR:', err)
     else:
-        print('  parsed album', album.album_title)
         return album
 
 
-def store(db, album):
+def store(db, cursor, album):
     try:
-        
-        print(album.album_artist)
-        print(album.album_title)
-        print(album.album_url)
-        print(album.album_cover)
-        print(album.critic_rating)
-        print(album.user_rating)
-        print(album.user_rating_count)
-        print(album.release_date)
-        print(album.duration)
-        print(album.genre)
-        print(album.styles)
-        # insert INSERT INTO `albums` (`album_artist`, `album_title`, `album_url`, `created_at`, `updated_at`) VALUES ('Yellow Swans', 'Going Places', 'goingplaces.com', '2019-03-14 03:37:45', '2019-03-14 03:37:45')
-
+        # INSERT INTO `albums` (`album_artist`, `album_title`, `album_url`, `created_at`, `updated_at`) VALUES ('Yellow Swans', 'Going Places', 'goingplaces.com', '2019-03-14 03:37:45', '2019-03-14 03:37:45')
+        dml = "INSERT INTO `albums` "\
+                "(`album_artist`, `album_title`, `album_url`, `album_cover`, `album_artist_url`, "\
+                "`critic_rating`, `user_rating_count`, `user_rating`, "\
+                "`release_date`, `duration`, `genre`) VALUES "\
+                "('{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}')"
+        query = dml.format(
+            album.album_artist,
+            album.album_title,
+            album.album_url,
+            album.album_cover,
+            album.album_artist_url,
+            album.critic_rating,
+            album.user_rating_count,
+            album.user_rating,
+            album.release_date,
+            album.duration,
+            album.genre
+        )
+        cursor.execute(query)
+        db.commit()
     except Exception as err:
-        print('STORE ERROR', err)
-    else:
-        print('  stored album', album.album_title)
+        writelog('STORE ERROR', err)
 
 
 def run():
     browser = get_browser()
-    db = mysql.connector.connect(user='root', passwd='root')
+    db, cursor = get_db()
     sitemaps = get_sitemaps()
     for sitemap in sitemaps:
         urls = parse_sitemaps(sitemap)
         for url in urls:
             # TODO remove this fake url
-            url = 'https://www.allmusic.com/album/going-places-mw0001958198'
+            # url = 'https://www.allmusic.com/album/going-places-mw0001958198'
+            # url = 'https://www.allmusic.com/album/psychic-mw0002579381'
+            url = 'https://www.allmusic.com/album/reign-in-blood-mw0000191741'
             html = get_html(browser, url)
             album = parse(url, html)
-            store(db, album)
+            store(db, cursor, album)
             break
         break
+    close_db(db, cursor)
 
 
 run()
