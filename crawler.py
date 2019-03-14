@@ -8,8 +8,8 @@ import os
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
 
-import mysql.connector as mysql
-from mysql import errorcode
+import mysql.connector
+from mysql.connector import errorcode
 
 ERR_SHORT = 1
 ERR_LONG = 3
@@ -20,6 +20,11 @@ class Album:
     def __init__(self, data):
         for key in data:
             setattr(self, key, data[key].strip() if isinstance(data[key], str) else data[key])
+
+
+def writelog(msg):
+  with open('log.txt', 'at') as fobj:
+    fobj.write(msg+'\n')
 
 
 def get_http_headers():
@@ -77,21 +82,49 @@ def get_html(browser, url):
         return html
 
 
-def parse(html):
+def select(tree, element):
+    try:
+        text = tree.select(element)[0].get_text()
+    except Exception as err:
+        text = ''
+        print('PARSE ERROR:', err)
+    return text
+
+
+def select_attrib(tree, element, attrib):
+    try:
+        text = tree.select(element)[0][attrib]
+    except Exception as err:
+        text = ''
+        print('PARSE ERROR:', err)
+    return text
+
+
+def select_list(tree, element):
+    try:
+        tags = [a.get_text() for a in tree.select(element)]
+    except Exception as err:
+        tags = []
+        print('PARSE ERROR:', err)
+    return tags
+
+
+def parse(url, html):
     try:
         tree = BeautifulSoup(html, 'lxml')
         album = Album({
-            'album_artist': tree.select('.album-artist')[0].get_text(),
-            'album_cover': tree.select('.album-cover img')[0]['src'],
-            'album_artist_url': tree.select('.album-artist a')[0]['href'],
-            'album_title': tree.select('.album-title')[0].get_text(),
-            'critic_rating': tree.select('.allmusic-rating')[0].get_text(),
-            'user_rating_count': tree.select('.average-user-rating-count')[0].get_text(),
-            'user_rating': tree.select('.average-user-rating')[0]['class'][1].split('-')[-1],
-            'release_date': tree.select('.release-date span')[0].get_text(),
-            'duration': tree.select('.duration span')[0].get_text(),
-            'genre': tree.select('.genre div')[0].get_text(),
-            'styles': [a.get_text() for a in tree.select('.styles a')]
+            'album_artist': select(tree, '.album-artist'),
+            'album_title': select(tree, '.album-title'),
+            'album_url': url,
+            'album_cover': select_attrib(tree, '.album-cover img', 'src'),
+            'album_artist_url': select_attrib(tree, '.album-artist a', 'href'),
+            'critic_rating': select(tree, '.allmusic-rating'),
+            'user_rating_count': select(tree, '.average-user-rating-count'),
+            'user_rating': select_attrib(tree, '.average-user-rating', 'class')[-1].split('-')[-1],
+            'release_date': select(tree, '.release-date span'),
+            'duration': select(tree, '.duration span'),
+            'genre': select(tree, '.genre div'),
+            'styles': select_list(tree, '.styles a')
         })
     except Exception as err:
         print('PARSE ERROR:', err)
@@ -104,11 +137,17 @@ def store(db, album):
     try:
         
         print(album.album_artist)
-        print(album.album_cover)
         print(album.album_title)
+        print(album.album_url)
+        print(album.album_cover)
         print(album.critic_rating)
         print(album.user_rating)
         print(album.user_rating_count)
+        print(album.release_date)
+        print(album.duration)
+        print(album.genre)
+        print(album.styles)
+        # insert INSERT INTO `albums` (`album_artist`, `album_title`, `album_url`, `created_at`, `updated_at`) VALUES ('Yellow Swans', 'Going Places', 'goingplaces.com', '2019-03-14 03:37:45', '2019-03-14 03:37:45')
 
     except Exception as err:
         print('STORE ERROR', err)
@@ -118,7 +157,7 @@ def store(db, album):
 
 def run():
     browser = get_browser()
-    db = mysql(hostname='localhost', user='user', passwd='password')
+    db = mysql.connector.connect(user='root', passwd='root')
     sitemaps = get_sitemaps()
     for sitemap in sitemaps:
         urls = parse_sitemaps(sitemap)
@@ -126,7 +165,7 @@ def run():
             # TODO remove this fake url
             url = 'https://www.allmusic.com/album/going-places-mw0001958198'
             html = get_html(browser, url)
-            album = parse(html)
+            album = parse(url, html)
             store(db, album)
             break
         break
