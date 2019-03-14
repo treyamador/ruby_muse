@@ -99,7 +99,7 @@ def select(tree, element):
         text = tree.select(element)[0].get_text()
     except Exception as err:
         text = ''
-        writelog('PARSE ERROR:', err)
+        writelog('PARSE ERROR', element, err)
     return text
 
 
@@ -108,7 +108,7 @@ def select_attrib(tree, element, attrib):
         text = tree.select(element)[0][attrib]
     except Exception as err:
         text = ''
-        writelog('PARSE ERROR:', err)
+        writelog('PARSE ERROR', element, err)
     return text
 
 
@@ -117,7 +117,7 @@ def select_list(tree, element):
         tags = [a.get_text() for a in tree.select(element)]
     except Exception as err:
         tags = []
-        writelog('PARSE ERROR:', err)
+        writelog('PARSE ERROR', element, err)
     return tags
 
 
@@ -139,7 +139,7 @@ def parse(url, html):
             'styles': select_list(tree, '.styles a')
         })
     except Exception as err:
-        writelog('PARSE ERROR:', err)
+        writelog('PARSE ERROR', element, err)
     else:
         return album
 
@@ -166,6 +166,15 @@ def store(db, cursor, album):
             album.genre
         )
         cursor.execute(query)
+
+        album_id = cursor.lastrowid
+        subdml = "INSERT INTO `styles` "\
+            "(`style`, `album_id`) VALUES "\
+            "('{}', '{}')"
+        subqueries = [subdml.format(s, album_id) for s in album.styles]
+        for subquery in subqueries:
+          cursor.execute(subquery)
+
         db.commit()
     except Exception as err:
         writelog('STORE ERROR', err)
@@ -178,16 +187,12 @@ def run():
     for sitemap in sitemaps:
         urls = parse_sitemaps(sitemap)
         for url in urls:
-            # TODO remove this fake url
-            # url = 'https://www.allmusic.com/album/going-places-mw0001958198'
-            # url = 'https://www.allmusic.com/album/psychic-mw0002579381'
-            url = 'https://www.allmusic.com/album/reign-in-blood-mw0000191741'
             html = get_html(browser, url)
             album = parse(url, html)
             store(db, cursor, album)
-            break
-        break
     close_db(db, cursor)
 
 
-run()
+if __name__ == '__main__':
+  run()
+
