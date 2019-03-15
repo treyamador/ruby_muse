@@ -23,10 +23,13 @@ class Album:
 
 
 def writelog(*msg):
-    out = ' '.join(str(i) for i in msg)+'\n'
-    print(out)
     with open('log.txt', 'at') as fobj:
-        fobj.write(out)
+        try:
+            out = ' '.join(str(i) for i in msg)+'\n'
+            print(out, end='')
+            fobj.write(out)
+        except Exception as err:
+            print('    ERROR Unexpected error, unable to log.')
 
 
 def get_db():
@@ -55,21 +58,23 @@ def connect(url, max_errors=3, retry_time=10):
                                   headers=get_http_headers())
             res = request.urlopen(req, timeout=60)
             if res is not None:
-                writelog('  connected to', res.geturl())
+                writelog('Connected to', res.geturl())
                 return res
             else:
                 raise ValueError('Result is not a web page')
         except Exception as err:
             error_counter += 1
-            writelog('URL ERROR', url, err)
+            writelog('    URL ERROR', url, err)
             time.sleep(retry_time)
 
 
 def get_browser():
     options = Options()
-    options.headless = True
-    return webdriver.Firefox(options=options, executable_path='geckodriver')
-    
+    # options.headless = True
+    driver = webdriver.Firefox(options=options, executable_path='geckodriver')
+    # driver.set_page_load_timeout(120)
+    return driver
+
 
 def get_sitemaps():
     return [
@@ -83,15 +88,19 @@ def parse_sitemaps(sitemap):
     return [loc.get_text() for loc in tree.find_all('loc')]
 
 
-def get_html(browser, url):
-    try:
-        browser.get(url)
-        html = browser.page_source
-    except Exception as err:
-        writelog('BROWSER ERROR', err)
-    else:
-        writelog('  connected to', url)
-        return html
+def get_html(browser, url, max_errors=3, sleep_time=10):
+    errors = 0
+    while errors < max_errors:
+        try:
+            browser.get(url)
+            html = browser.page_source
+        except Exception as err:
+            writelog('    BROWSER ERROR', err)
+            errors += 1
+            time.sleep(sleep_time)
+        else:
+            writelog('Connected to', url)
+            return html
 
 
 def select(tree, element):
@@ -99,7 +108,7 @@ def select(tree, element):
         text = tree.select(element)[0].get_text()
     except Exception as err:
         text = ''
-        writelog('PARSE ERROR', element, err)
+        writelog('    PARSE ERROR', element, err)
     return text
 
 
@@ -108,7 +117,7 @@ def select_attrib(tree, element, attrib):
         text = tree.select(element)[0][attrib]
     except Exception as err:
         text = ''
-        writelog('PARSE ERROR', element, err)
+        writelog('    PARSE ERROR', element, err)
     return text
 
 
@@ -117,7 +126,7 @@ def select_list(tree, element):
         tags = [a.get_text() for a in tree.select(element)]
     except Exception as err:
         tags = []
-        writelog('PARSE ERROR', element, err)
+        writelog('    PARSE ERROR', element, err)
     return tags
 
 
@@ -139,19 +148,19 @@ def parse(url, html):
             'styles': select_list(tree, '.styles a')
         })
     except Exception as err:
-        writelog('PARSE ERROR', element, err)
+        writelog('    PARSE ERROR', url, err)
     else:
         return album
 
 
-def store(db, cursor, album):
+def store(db, cursor, album, i):
     try:
         # INSERT INTO `albums` (`album_artist`, `album_title`, `album_url`, `created_at`, `updated_at`) VALUES ('Yellow Swans', 'Going Places', 'goingplaces.com', '2019-03-14 03:37:45', '2019-03-14 03:37:45')
         dml = "INSERT INTO `albums` "\
                 "(`album_artist`, `album_title`, `album_url`, `album_cover`, `album_artist_url`, "\
                 "`critic_rating`, `user_rating_count`, `user_rating`, "\
                 "`release_date`, `duration`, `genre`) VALUES "\
-                "('{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}')"
+                "(\"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\")"
         query = dml.format(
             album.album_artist,
             album.album_title,
@@ -170,26 +179,30 @@ def store(db, cursor, album):
         album_id = cursor.lastrowid
         subdml = "INSERT INTO `styles` "\
             "(`style`, `album_id`) VALUES "\
-            "('{}', '{}')"
+            "(\"{}\", \"{}\")"
         subqueries = [subdml.format(s, album_id) for s in album.styles]
         for subquery in subqueries:
           cursor.execute(subquery)
 
         db.commit()
+        writelog('  Stored item', i, album.album_url)
     except Exception as err:
-        writelog('STORE ERROR', err)
+        writelog('    STORE ERROR item', i, err)
 
 
 def run():
     browser = get_browser()
     db, cursor = get_db()
-    sitemaps = get_sitemaps()
+    sitemaps = get_sitemaps()[:1]
     for sitemap in sitemaps:
         urls = parse_sitemaps(sitemap)
-        for url in urls:
-            html = get_html(browser, url)
-            album = parse(url, html)
-            store(db, cursor, album)
+        for i, url in enumerate(urls):
+            # TODO change based on where last left off
+            if i > 1489:
+                html = get_html(browser, url)
+                album = parse(url, html)
+                store(db, cursor, album, i)
+                time.sleep(10)
     close_db(db, cursor)
 
 
