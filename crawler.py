@@ -2,6 +2,7 @@ from bs4 import BeautifulSoup
 from html import parser
 import requests
 from urllib import request
+from random import random
 import time
 import os
 
@@ -14,6 +15,8 @@ from mysql.connector import errorcode
 ERR_SHORT = 1
 ERR_LONG = 3
 MAX_ERRORS = 3
+
+BROWSER = None
 
 
 class Album:
@@ -70,10 +73,18 @@ def connect(url, max_errors=3, retry_time=10):
 
 def get_browser():
     options = Options()
-    # options.headless = True
+    options.headless = True
     driver = webdriver.Firefox(options=options, executable_path='geckodriver')
-    # driver.set_page_load_timeout(120)
+    driver.set_page_load_timeout(30)
     return driver
+
+
+def restart_browser(err=''):
+    global BROWSER
+    writelog('    BROWSER ERROR', err)
+    BROWSER.quit()
+    time.sleep(15)
+    BROWSER = get_browser()
 
 
 def get_sitemaps():
@@ -88,16 +99,16 @@ def parse_sitemaps(sitemap):
     return [loc.get_text() for loc in tree.find_all('loc')]
 
 
-def get_html(browser, url, max_errors=3, sleep_time=10):
+def get_html(url):
+    global BROWSER
     errors = 0
-    while errors < max_errors:
+    while errors < 3:
         try:
-            browser.get(url)
-            html = browser.page_source
+            BROWSER.get(url)
+            html = BROWSER.page_source
         except Exception as err:
-            writelog('    BROWSER ERROR', err)
             errors += 1
-            time.sleep(sleep_time)
+            restart_browser(err)
         else:
             writelog('Connected to', url)
             return html
@@ -105,7 +116,7 @@ def get_html(browser, url, max_errors=3, sleep_time=10):
 
 def select(tree, element):
     try:
-        text = tree.select(element)[0].get_text()
+        text = tree.select(element)[0].get_text().replace('\"', '')
     except Exception as err:
         text = ''
         writelog('    PARSE ERROR', element, err)
@@ -123,7 +134,7 @@ def select_attrib(tree, element, attrib):
 
 def select_list(tree, element):
     try:
-        tags = [a.get_text() for a in tree.select(element)]
+        tags = [a.get_text().replace('\"', '') for a in tree.select(element)]
     except Exception as err:
         tags = []
         writelog('    PARSE ERROR', element, err)
@@ -191,21 +202,22 @@ def store(db, cursor, album, i):
 
 
 def run():
-    browser = get_browser()
+    global BROWSER
+    BROWSER = get_browser()
     db, cursor = get_db()
     sitemaps = get_sitemaps()[:1]
     for sitemap in sitemaps:
         urls = parse_sitemaps(sitemap)
         for i, url in enumerate(urls):
             # TODO change based on where last left off
-            if i > 1489:
-                html = get_html(browser, url)
+            if i > 9248:
+                html = get_html(url)
                 album = parse(url, html)
                 store(db, cursor, album, i)
-                time.sleep(10)
     close_db(db, cursor)
+    BROWSER.quit()
 
 
 if __name__ == '__main__':
-  run()
+    run()
 
