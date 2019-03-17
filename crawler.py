@@ -7,7 +7,7 @@ import time
 import os
 
 from selenium import webdriver
-from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.chrome.options import Options
 
 import mysql.connector
 from mysql.connector import errorcode
@@ -73,8 +73,11 @@ def connect(url, max_errors=3, retry_time=10):
 
 def get_browser():
     options = Options()
-    options.headless = True
-    driver = webdriver.Firefox(options=options, executable_path='geckodriver')
+    options.add_argument("--headless")
+    driver = webdriver.Chrome(
+        chrome_options=options,
+        executable_path=os.path.abspath('chromedriver')
+    )
     driver.set_page_load_timeout(30)
     return driver
 
@@ -82,9 +85,9 @@ def get_browser():
 def restart_browser(err=''):
     global BROWSER
     writelog('    BROWSER ERROR', err)
-    BROWSER.quit()
+    # BROWSER.quit()
     time.sleep(15)
-    BROWSER = get_browser()
+    # BROWSER = get_browser()
 
 
 def get_sitemaps():
@@ -205,12 +208,12 @@ def run():
     global BROWSER
     BROWSER = get_browser()
     db, cursor = get_db()
-    sitemaps = get_sitemaps()[:1]
+    sitemaps = get_sitemaps()[1:2]
     for sitemap in sitemaps:
         urls = parse_sitemaps(sitemap)
         for i, url in enumerate(urls):
             # TODO change based on where last left off
-            if i > 9248:
+            if i > 0:
                 html = get_html(url)
                 album = parse(url, html)
                 store(db, cursor, album, i)
