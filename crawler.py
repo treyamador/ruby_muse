@@ -208,12 +208,12 @@ def run():
     global BROWSER
     BROWSER = get_browser()
     db, cursor = get_db()
-    sitemaps = get_sitemaps()[1:2]
+    sitemaps = get_sitemaps()[2:4]
     for sitemap in sitemaps:
         urls = parse_sitemaps(sitemap)
         for i, url in enumerate(urls):
             # TODO change based on where last left off
-            if i > 0:
+            if i >= 0:
                 html = get_html(url)
                 album = parse(url, html)
                 store(db, cursor, album, i)
