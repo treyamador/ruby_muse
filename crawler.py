@@ -3,6 +3,7 @@ from html import parser
 import requests
 from urllib import request
 from random import random
+from datetime import datetime
 import time
 import os
 
@@ -15,8 +16,6 @@ from mysql.connector import errorcode
 ERR_SHORT = 1
 ERR_LONG = 3
 MAX_ERRORS = 3
-
-BROWSER = None
 
 
 class Album:
@@ -36,7 +35,7 @@ def writelog(*msg):
 
 
 def get_db():
-    db = mysql.connector.connect(user='root', passwd='root', database='Muse_development')
+    db = mysql.connector.connect(user='root', passwd='root', database='music_collection')
     return db, db.cursor()
 
 
@@ -83,11 +82,8 @@ def get_browser():
 
 
 def restart_browser(err=''):
-    global BROWSER
     writelog('    BROWSER ERROR', err)
-    # BROWSER.quit()
     time.sleep(15)
-    # BROWSER = get_browser()
 
 
 def get_sitemaps():
@@ -102,13 +98,12 @@ def parse_sitemaps(sitemap):
     return [loc.get_text() for loc in tree.find_all('loc')]
 
 
-def get_html(url):
-    global BROWSER
+def get_html(browser, url):
     errors = 0
     while errors < 3:
         try:
-            BROWSER.get(url)
-            html = BROWSER.page_source
+            browser.get(url)
+            html = browser.page_source
         except Exception as err:
             errors += 1
             restart_browser(err)
@@ -143,20 +138,32 @@ def select_list(tree, element):
         writelog('    PARSE ERROR', element, err)
     return tags
 
+def select_date(tree, element):
+    try:
+        text = tree.select(element)[0].get_text().replace('\"', '')
+        if len(text) == 4:
+            date = datetime.strptime(text, '%Y')
+        else:
+            date = datetime.strptime(text, '%B %d, %Y')
+    except Exception as err:
+        date = ''
+        writelog('    PARSE ERROR', element, err)
+    return date
+
 
 def parse(url, html):
     try:
         tree = BeautifulSoup(html, 'lxml')
         album = Album({
-            'album_artist': select(tree, '.album-artist'),
-            'album_title': select(tree, '.album-title'),
-            'album_url': url,
-            'album_cover': select_attrib(tree, '.album-cover img', 'src'),
-            'album_artist_url': select_attrib(tree, '.album-artist a', 'href'),
+            'artist': select(tree, '.album-artist'),
+            'title': select(tree, '.album-title'),
+            'url': url,
+            'cover': select_attrib(tree, '.album-cover img', 'src'),
+            'artist_url': select_attrib(tree, '.album-artist a', 'href'),
             'critic_rating': select(tree, '.allmusic-rating'),
             'user_rating_count': select(tree, '.average-user-rating-count').replace(',', ''),
             'user_rating': select_attrib(tree, '.average-user-rating', 'class')[-1].split('-')[-1],
-            'release_date': select(tree, '.release-date span'),
+            'release_date': select_date(tree, '.release-date span'),
             'duration': select(tree, '.duration span'),
             'genre': select(tree, '.genre div'),
             'styles': select_list(tree, '.styles a')
@@ -169,18 +176,17 @@ def parse(url, html):
 
 def store(db, cursor, album, i):
     try:
-        # INSERT INTO `albums` (`album_artist`, `album_title`, `album_url`, `created_at`, `updated_at`) VALUES ('Yellow Swans', 'Going Places', 'goingplaces.com', '2019-03-14 03:37:45', '2019-03-14 03:37:45')
-        dml = "INSERT INTO `albums` "\
-                "(`album_artist`, `album_title`, `album_url`, `album_cover`, `album_artist_url`, "\
+        dml = "INSERT INTO `album` "\
+                "(`artist`, `title`, `url`, `cover`, `artist_url`, "\
                 "`critic_rating`, `user_rating_count`, `user_rating`, "\
                 "`release_date`, `duration`, `genre`) VALUES "\
                 "(\"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\")"
         query = dml.format(
-            album.album_artist,
-            album.album_title,
-            album.album_url,
-            album.album_cover,
-            album.album_artist_url,
+            album.artist,
+            album.title,
+            album.url,
+            album.cover,
+            album.artist_url,
             album.critic_rating,
             album.user_rating_count,
             album.user_rating,
@@ -191,7 +197,7 @@ def store(db, cursor, album, i):
         cursor.execute(query)
 
         album_id = cursor.lastrowid
-        subdml = "INSERT INTO `styles` "\
+        subdml = "INSERT INTO `style` "\
             "(`style`, `album_id`) VALUES "\
             "(\"{}\", \"{}\")"
         subqueries = [subdml.format(s, album_id) for s in album.styles]
@@ -199,26 +205,26 @@ def store(db, cursor, album, i):
           cursor.execute(subquery)
 
         db.commit()
-        writelog('  Stored item', i, album.album_url)
+        writelog('  Stored item', i, album.url)
     except Exception as err:
         writelog('    STORE ERROR item', i, err)
 
 
 def run():
-    global BROWSER
-    BROWSER = get_browser()
+    browser = get_browser()
     db, cursor = get_db()
-    sitemaps = get_sitemaps()[2:4]
+    # started new db with map 4
+    sitemaps = get_sitemaps()[4:5]
     for sitemap in sitemaps:
         urls = parse_sitemaps(sitemap)
         for i, url in enumerate(urls):
-            # TODO change based on where last left off
+            # change based on where last left off
             if i >= 0:
-                html = get_html(url)
+                html = get_html(browser, url)
                 album = parse(url, html)
                 store(db, cursor, album, i)
     close_db(db, cursor)
-    BROWSER.quit()
+    browser.quit()
 
 
 if __name__ == '__main__':
