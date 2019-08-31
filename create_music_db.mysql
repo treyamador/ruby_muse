@@ -1,0 +1,40 @@
+
+CREATE DATABASE IF NOT EXISTS music_collection;
+use music_collection;
+
+CREATE TABLE IF NOT EXISTS album (
+	id BIGINT(20) NOT NULL AUTO_INCREMENT,
+	artist VARCHAR(255) NOT NULL,
+	title VARCHAR(255) NOT NULL,
+	url VARCHAR(2083) NOT NULL,
+	cover VARCHAR(255),
+	artist_url VARCHAR(255),
+	critic_rating INT(11),
+	user_rating_count INT(11),
+	user_rating INT(11),
+	release_date DATE,
+	duration VARCHAR(255),
+	PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS genre (
+  id BIGINT(20) NOT NULL AUTO_INCREMENT,
+  genre VARCHAR(255) NOT NULL,
+  album_id BIGINT(20) NOT NULL,
+  PRIMARY KEY (id),
+  FOREIGN KEY (album_id) REFERENCES album(id)
+);
+
+CREATE TABLE IF NOT EXISTS style (
+	id BIGINT(20) NOT NULL AUTO_INCREMENT,
+	style VARCHAR(255) NOT NULL,
+	album_id BIGINT(20) NOT NULL,
+	PRIMARY KEY (id),
+	FOREIGN KEY (album_id) REFERENCES album(id)
+);
+
+CREATE TABLE IF NOT EXISTS log (
+  id BIGINT(20) NOT NULL AUTO_INCREMENT,
+  page VARCHAR(255) NOT NULL,
+  url VARCHAR(2083) NOT NULL,
+);

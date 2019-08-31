@@ -165,7 +165,7 @@ def parse(url, html):
             'user_rating': select_attrib(tree, '.average-user-rating', 'class')[-1].split('-')[-1],
             'release_date': select_date(tree, '.release-date span'),
             'duration': select(tree, '.duration span'),
-            'genre': select(tree, '.genre div'),
+            'genre': select_list(tree, '.genre a'),
             'styles': select_list(tree, '.styles a')
         })
     except Exception as err:
@@ -179,8 +179,8 @@ def store(db, cursor, album, i):
         dml = "INSERT INTO `album` "\
                 "(`artist`, `title`, `url`, `cover`, `artist_url`, "\
                 "`critic_rating`, `user_rating_count`, `user_rating`, "\
-                "`release_date`, `duration`, `genre`) VALUES "\
-                "(\"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\")"
+                "`release_date`, `duration`) VALUES "\
+                "(\"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\")"
         query = dml.format(
             album.artist,
             album.title,
@@ -191,12 +191,18 @@ def store(db, cursor, album, i):
             album.user_rating_count,
             album.user_rating,
             album.release_date,
-            album.duration,
-            album.genre
+            album.duration
         )
         cursor.execute(query)
 
         album_id = cursor.lastrowid
+        subdml = "INSERT INTO `style` "\
+            "(`genre`, `album_id`) VALUES "\
+            "(\"{}\", \"{}\")"
+        subqueries = [subdml.format(g, album_id) for g in album.genre]
+        for subquery in subqueries:
+          cursor.execute(subquery)
+
         subdml = "INSERT INTO `style` "\
             "(`style`, `album_id`) VALUES "\
             "(\"{}\", \"{}\")"
@@ -214,7 +220,7 @@ def run():
     browser = get_browser()
     db, cursor = get_db()
     # started new db with map 4
-    sitemaps = get_sitemaps()[4:5]
+    sitemaps = get_sitemaps()
     for sitemap in sitemaps:
         urls = parse_sitemaps(sitemap)
         for i, url in enumerate(urls):
