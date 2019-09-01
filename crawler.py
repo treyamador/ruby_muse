@@ -92,10 +92,11 @@ def get_sitemaps():
     ]
 
 
-def parse_sitemaps(sitemap):
+def parse_sitemaps(cursor, sitemap):
     res = connect(sitemap)
     tree = BeautifulSoup(res, 'lxml')
-    return [loc.get_text() for loc in tree.find_all('loc')]
+    urls = [loc.get_text() for loc in tree.find_all('loc')]
+    return visited_urls(cursor, sitemap, urls)
 
 
 def get_html(browser, url):
@@ -235,18 +236,12 @@ def run():
     browser = get_browser()
     db, cursor = get_db()
     sitemaps = current_sitemaps(cursor)
-    prev_urls = visited_urls(sitemaps[0])
     for sitemap in sitemaps:
-        urls = parse_sitemaps(sitemap)
-
-
-
+        urls = parse_sitemaps(cursor, sitemap)
         for i, url in enumerate(urls):
-            # change based on where last left off
-            if i >= 0:
-                html = get_html(browser, url)
-                album = parse(url, html)
-                store(db, cursor, album, i)
+          html = get_html(browser, url)
+          album = parse(url, html)
+          store(db, cursor, album, i)
     close_db(db, cursor)
     browser.quit()
 
