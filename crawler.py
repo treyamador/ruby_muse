@@ -151,6 +151,21 @@ def select_date(tree, element):
     return date
 
 
+def current_sitemaps(cursor):
+  sitemaps = get_sitemaps()
+  entry_query = "SELECT `sitemap` FROM `log` ORDER BY `id` DESC LIMIT 1"
+  cursor.execute(entry_query)
+  sitemap = cursor.fetchone()[0]
+  return list(filter(lambda e: e >= sitemap))
+
+
+def visited_urls(cursor, sitemap, urls):
+  entry_query = "SELECT `url` FROM `log` WHERE `log.sitemap` = `{sitemap}`"
+  cursor.execute(entry_query)
+  prev_urls = [e[0] for e in cursor.fetchall()]
+  return [e for e in urls if item not in prev_urls]
+
+
 def parse(url, html):
     try:
         tree = BeautifulSoup(html, 'lxml')
@@ -219,10 +234,13 @@ def store(db, cursor, album, i):
 def run():
     browser = get_browser()
     db, cursor = get_db()
-    # started new db with map 4
-    sitemaps = get_sitemaps()
+    sitemaps = current_sitemaps(cursor)
+    prev_urls = visited_urls(sitemaps[0])
     for sitemap in sitemaps:
         urls = parse_sitemaps(sitemap)
+
+
+
         for i, url in enumerate(urls):
             # change based on where last left off
             if i >= 0:
