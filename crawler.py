@@ -139,6 +139,7 @@ def select_list(tree, element):
         writelog('    PARSE ERROR', element, err)
     return tags
 
+
 def select_date(tree, element):
     try:
         text = tree.select(element)[0].get_text().replace('\"', '')
@@ -153,18 +154,20 @@ def select_date(tree, element):
 
 
 def current_sitemaps(cursor):
-  sitemaps = get_sitemaps()
   entry_query = "SELECT `sitemap` FROM `log` ORDER BY `id` DESC LIMIT 1"
   cursor.execute(entry_query)
-  sitemap = cursor.fetchone()[0]
-  return list(filter(lambda e: e >= sitemap))
+  last_sitemap = cursor.fetchone()
+  if last_sitemap is None:
+    return get_sitemaps()
+  last_sitemap = last_sitemap[0]
+  return list(filter(lambda e: e >= last_sitemap, get_sitemaps()))
 
 
 def visited_urls(cursor, sitemap, urls):
-  entry_query = "SELECT `url` FROM `log` WHERE `log.sitemap` = `{sitemap}`"
+  entry_query = "SELECT url FROM log WHERE sitemap = \"{}\"".format(sitemap)
   cursor.execute(entry_query)
   prev_urls = [e[0] for e in cursor.fetchall()]
-  return [e for e in urls if item not in prev_urls]
+  return [e for e in urls if e not in prev_urls]
 
 
 def parse(url, html):
@@ -190,7 +193,7 @@ def parse(url, html):
         return album
 
 
-def store(db, cursor, album, i):
+def store(db, cursor, album, sitemap):
     try:
         dml = "INSERT INTO `album` "\
                 "(`artist`, `title`, `url`, `cover`, `artist_url`, "\
@@ -212,7 +215,7 @@ def store(db, cursor, album, i):
         cursor.execute(query)
 
         album_id = cursor.lastrowid
-        subdml = "INSERT INTO `style` "\
+        subdml = "INSERT INTO `genre` "\
             "(`genre`, `album_id`) VALUES "\
             "(\"{}\", \"{}\")"
         subqueries = [subdml.format(g, album_id) for g in album.genre]
@@ -226,22 +229,28 @@ def store(db, cursor, album, i):
         for subquery in subqueries:
           cursor.execute(subquery)
 
+        logdml = "INSERT INTO `log` "\
+            "(`sitemap`, `url`) VALUES "\
+            "(\"{}\", \"{}\")"
+        logquery = logdml.format(sitemap, album.url)
+        cursor.execute(logquery)
+
         db.commit()
-        writelog('  Stored item', i, album.url)
+        writelog('  Stored item', sitemap, album.url)
     except Exception as err:
-        writelog('    STORE ERROR item', i, err)
+        writelog('    STORE ERROR item', sitemap, err)
 
 
 def run():
     browser = get_browser()
     db, cursor = get_db()
     sitemaps = current_sitemaps(cursor)
-    for sitemap in sitemaps:
+    for sitemap in sitemaps[:10]:
         urls = parse_sitemaps(cursor, sitemap)
         for i, url in enumerate(urls):
           html = get_html(browser, url)
           album = parse(url, html)
-          store(db, cursor, album, i)
+          store(db, cursor, album, sitemap)
     close_db(db, cursor)
     browser.quit()
 
