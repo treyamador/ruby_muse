@@ -29,7 +29,6 @@ def writelog(*msg):
         try:
             out = ' '.join(str(i) for i in msg)+'\n'
             print(out, end='')
-            fobj.write(out)
         except Exception as err:
             print('    ERROR Unexpected error, unable to log.')
 
@@ -154,20 +153,20 @@ def select_date(tree, element):
 
 
 def current_sitemaps(cursor):
-  entry_query = "SELECT `sitemap` FROM `log` ORDER BY `id` DESC LIMIT 1"
-  cursor.execute(entry_query)
-  last_sitemap = cursor.fetchone()
-  if last_sitemap is None:
-    return get_sitemaps()
-  last_sitemap = last_sitemap[0]
-  return list(filter(lambda e: e >= last_sitemap, get_sitemaps()))
+    entry_query = "SELECT `sitemap` FROM `logs` ORDER BY `id` DESC LIMIT 1"
+    cursor.execute(entry_query)
+    last_sitemap = cursor.fetchone()
+    if last_sitemap is None:
+        return get_sitemaps()
+    last_sitemap = last_sitemap[0]
+    return list(filter(lambda e: e >= last_sitemap, get_sitemaps()))
 
 
 def visited_urls(cursor, sitemap, urls):
-  entry_query = "SELECT url FROM log WHERE sitemap = \"{}\"".format(sitemap)
-  cursor.execute(entry_query)
-  prev_urls = [e[0] for e in cursor.fetchall()]
-  return [e for e in urls if e not in prev_urls]
+    entry_query = "SELECT url FROM logs WHERE sitemap = \"{}\"".format(sitemap)
+    cursor.execute(entry_query)
+    prev_urls = [e[0] for e in cursor.fetchall()]
+    return [e for e in urls if e not in prev_urls]
 
 
 def parse(url, html):
@@ -195,7 +194,7 @@ def parse(url, html):
 
 def store(db, cursor, album, sitemap):
     try:
-        dml = "INSERT INTO `album` "\
+        dml = "INSERT INTO `albums` "\
                 "(`artist`, `title`, `url`, `cover`, `artist_url`, "\
                 "`critic_rating`, `user_rating_count`, `user_rating`, "\
                 "`release_date`, `duration`) VALUES "\
@@ -215,21 +214,21 @@ def store(db, cursor, album, sitemap):
         cursor.execute(query)
 
         album_id = cursor.lastrowid
-        subdml = "INSERT INTO `genre` "\
+        subdml = "INSERT INTO `genres` "\
             "(`genre`, `album_id`) VALUES "\
             "(\"{}\", \"{}\")"
         subqueries = [subdml.format(g, album_id) for g in album.genre]
         for subquery in subqueries:
-          cursor.execute(subquery)
+            cursor.execute(subquery)
 
-        subdml = "INSERT INTO `style` "\
+        subdml = "INSERT INTO `styles` "\
             "(`style`, `album_id`) VALUES "\
             "(\"{}\", \"{}\")"
         subqueries = [subdml.format(s, album_id) for s in album.styles]
         for subquery in subqueries:
-          cursor.execute(subquery)
+            cursor.execute(subquery)
 
-        logdml = "INSERT INTO `log` "\
+        logdml = "INSERT INTO `logs` "\
             "(`sitemap`, `url`) VALUES "\
             "(\"{}\", \"{}\")"
         logquery = logdml.format(sitemap, album.url)
@@ -248,9 +247,9 @@ def run():
     for sitemap in sitemaps[:10]:
         urls = parse_sitemaps(cursor, sitemap)
         for i, url in enumerate(urls):
-          html = get_html(browser, url)
-          album = parse(url, html)
-          store(db, cursor, album, sitemap)
+            html = get_html(browser, url)
+            album = parse(url, html)
+            store(db, cursor, album, sitemap)
     close_db(db, cursor)
     browser.quit()
 
