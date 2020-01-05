@@ -1,9 +1,8 @@
 from bs4 import BeautifulSoup
 from html import parser
-import requests
-from urllib import request
-from random import random
+
 from datetime import datetime
+from dateutil import parser
 import time
 import os
 
@@ -21,20 +20,24 @@ MAX_ERRORS = 3
 class Album:
     def __init__(self, data):
         for key in data:
-            setattr(self, key, data[key].strip() if isinstance(data[key], str) else data[key])
+            val = data[key]
+            if not val:
+                val = 'NULL'
+            elif isinstance(val, str):
+                val = val.strip()
+            setattr(self, key, val)
 
 
 def writelog(*msg):
-    with open('log.txt', 'at') as fobj:
-        try:
-            out = ' '.join(str(i) for i in msg)+'\n'
-            print(out, end='')
-        except Exception as err:
-            print('    ERROR Unexpected error, unable to log.')
+    try:
+        out = ' '.join(str(i) for i in msg)+'\n'
+        print(out, end='')
+    except Exception:
+        print('    ERROR Unexpected error, unable to log.')
 
 
 def get_db():
-    db = mysql.connector.connect(user='root', passwd='root', database='music_collection')
+    db = mysql.connector.connect(user='root', passwd='rootuser', database='music_collection')
     return db, db.cursor()
 
 
@@ -44,36 +47,14 @@ def close_db(db, cursor):
 
 
 def get_http_headers():
-    version_info = (1, 0, 25)
-    __version__ = ".".join(map(str, version_info))
-    browser_user_agent = 'superscraper/%s' % __version__
-    headers = {'User-Agent': 'Chrome/44.0.2403.157'}
-    return headers
-
-
-def connect(url, max_errors=3, retry_time=10):
-    error_counter = 0
-    while error_counter < max_errors:
-        try:
-            req = request.Request(url,
-                                  headers=get_http_headers())
-            res = request.urlopen(req, timeout=60)
-            if res is not None:
-                writelog('Connected to', res.geturl())
-                return res
-            else:
-                raise ValueError('Result is not a web page')
-        except Exception as err:
-            error_counter += 1
-            writelog('    URL ERROR', url, err)
-            time.sleep(retry_time)
+    return {'User-Agent': 'Chrome/44.0.2403.157'}
 
 
 def get_browser():
     options = Options()
     options.add_argument("--headless")
     driver = webdriver.Chrome(
-        chrome_options=options,
+        options=options,
         executable_path=os.path.abspath('chromedriver')
     )
     driver.set_page_load_timeout(30)
@@ -86,16 +67,31 @@ def restart_browser(err=''):
 
 
 def get_sitemaps():
-    return [
-        'https://www.allmusic.com/sitemaps/sitemap-'+str(i)+'.xml' for i in range(80, 141)
-    ]
+    return ['sitemaps/sitemap-{}.webarchive'.format(i) for i in range(80, 141)]
+
+
+def visited_urls(cursor, sitemap, urls):
+    entry_query = "SELECT url FROM logs WHERE sitemap = \"{}\"".format(sitemap)
+    cursor.execute(entry_query)
+    prev_urls = [e[0] for e in cursor.fetchall()]
+    return [e for e in urls if e not in prev_urls]
 
 
 def parse_sitemaps(cursor, sitemap):
-    res = connect(sitemap)
-    tree = BeautifulSoup(res, 'lxml')
-    urls = [loc.get_text() for loc in tree.find_all('loc')]
-    return visited_urls(cursor, sitemap, urls)
+    with open(sitemap, 'rt') as fobj:
+        tree = BeautifulSoup(fobj.read(), 'lxml')
+        urls = [loc.get_text() for loc in tree.find_all('loc')]
+        return visited_urls(cursor, sitemap, urls)
+
+
+def current_sitemaps(cursor):
+    entry_query = "SELECT `sitemap` FROM `logs` ORDER BY `id` DESC LIMIT 1"
+    cursor.execute(entry_query)
+    last_sitemap = cursor.fetchone()
+    if last_sitemap is None:
+        return get_sitemaps()
+    last_sitemap = last_sitemap[0]
+    return list(filter(lambda e: e >= last_sitemap, get_sitemaps()))
 
 
 def get_html(browser, url):
@@ -121,6 +117,10 @@ def select(tree, element):
     return text
 
 
+def to_int(text):
+    return int(text) if text.strip() else 0
+
+
 def select_attrib(tree, element, attrib):
     try:
         text = tree.select(element)[0][attrib]
@@ -142,31 +142,11 @@ def select_list(tree, element):
 def select_date(tree, element):
     try:
         text = tree.select(element)[0].get_text().replace('\"', '')
-        if len(text) == 4:
-            date = datetime.strptime(text, '%Y')
-        else:
-            date = datetime.strptime(text, '%B %d, %Y')
+        year = parser.parse(text).year
     except Exception as err:
-        date = ''
+        year = ''
         writelog('    PARSE ERROR', element, err)
-    return date
-
-
-def current_sitemaps(cursor):
-    entry_query = "SELECT `sitemap` FROM `logs` ORDER BY `id` DESC LIMIT 1"
-    cursor.execute(entry_query)
-    last_sitemap = cursor.fetchone()
-    if last_sitemap is None:
-        return get_sitemaps()
-    last_sitemap = last_sitemap[0]
-    return list(filter(lambda e: e >= last_sitemap, get_sitemaps()))
-
-
-def visited_urls(cursor, sitemap, urls):
-    entry_query = "SELECT url FROM logs WHERE sitemap = \"{}\"".format(sitemap)
-    cursor.execute(entry_query)
-    prev_urls = [e[0] for e in cursor.fetchall()]
-    return [e for e in urls if e not in prev_urls]
+    return year
 
 
 def parse(url, html):
@@ -181,7 +161,7 @@ def parse(url, html):
             'critic_rating': select(tree, '.allmusic-rating'),
             'user_rating_count': select(tree, '.average-user-rating-count').replace(',', ''),
             'user_rating': select_attrib(tree, '.average-user-rating', 'class')[-1].split('-')[-1],
-            'release_date': select_date(tree, '.release-date span'),
+            'year': select_date(tree, '.release-date span'),
             'duration': select(tree, '.duration span'),
             'genre': select_list(tree, '.genre a'),
             'styles': select_list(tree, '.styles a')
@@ -197,7 +177,7 @@ def store(db, cursor, album, sitemap):
         dml = "INSERT INTO `albums` "\
                 "(`artist`, `title`, `url`, `cover`, `artist_url`, "\
                 "`critic_rating`, `user_rating_count`, `user_rating`, "\
-                "`release_date`, `duration`) VALUES "\
+                "`year`, `duration`) VALUES "\
                 "(\"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\")"
         query = dml.format(
             album.artist,
@@ -208,7 +188,7 @@ def store(db, cursor, album, sitemap):
             album.critic_rating,
             album.user_rating_count,
             album.user_rating,
-            album.release_date,
+            album.year,
             album.duration
         )
         cursor.execute(query)
@@ -244,14 +224,23 @@ def run():
     browser = get_browser()
     db, cursor = get_db()
     sitemaps = current_sitemaps(cursor)
-    for sitemap in sitemaps[:10]:
+
+    # TODO: remove this replacement
+    sitemaps = ['sitemaps/sitemap-139.xml']
+
+    for sitemap in sitemaps:
         urls = parse_sitemaps(cursor, sitemap)
-        for i, url in enumerate(urls):
+        for url in urls:
             html = get_html(browser, url)
             album = parse(url, html)
             store(db, cursor, album, sitemap)
+
+            break
+        break
+
     close_db(db, cursor)
     browser.quit()
+    print('Process complete.  Exiting.')
 
 
 if __name__ == '__main__':
