@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS albums (
 	critic_rating INT(11),
 	user_rating_count INT(11),
 	user_rating INT(11),
-	year DATE,
+	year SMALLINT,
 	duration VARCHAR(255),
 	PRIMARY KEY (id)
 );
