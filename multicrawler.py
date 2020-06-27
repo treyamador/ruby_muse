@@ -8,9 +8,12 @@ import os
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 import mysql.connector
 from mysql.connector import errorcode
+
+import threading
 
 ERR_SHORT = 1
 ERR_LONG = 3
@@ -30,7 +33,7 @@ def writelog(*msg):
         out = ' '.join(str(i) for i in msg)+'\n'
         print(out, end='')
     except Exception:
-        print('    ERROR Unexpected error, unable to log.')
+        print('      ERROR Unexpected error, unable to log.')
 
 def get_db():
     db = mysql.connector.connect(user='root', passwd='rootuser', database='music_collection')
@@ -44,18 +47,24 @@ def get_http_headers():
     return {'User-Agent': 'Chrome/44.0.2403.157'}
 
 def get_browser():
+    # prefs = { 'profile.managed_default_content_settings.images': 2 }
+    caps = DesiredCapabilities().CHROME
+    caps["pageLoadStrategy"] = "eager"
     options = Options()
     options.add_argument("--headless")
+    # options.add_argument('load-extension=' + os.path.abspath('3.8.4_0'))
+    # options.add_experimental_option("prefs", prefs)
     driver = webdriver.Chrome(
         options=options,
-        executable_path=os.path.abspath('chromedriver')
+        executable_path=os.path.abspath('chromedriver'),
+        desired_capabilities=caps
     )
     driver.set_page_load_timeout(30)
     return driver
 
 def restart_browser(err=''):
-    writelog('    BROWSER ERROR', err)
-    time.sleep(1)
+    writelog('      BROWSER ERROR', err)
+    time.sleep(5)
 
 def get_sitemaps():
     return ['urls/sitemap-{}.txt'.format(i) for i in range(80, 141)]
@@ -83,16 +92,15 @@ def get_html(browser, url):
             errors += 1
             restart_browser(err)
         else:
-            writelog('Connected to', url)
+            writelog('  Connected to', url)
             return html
-
 
 def select(tree, element):
     try:
         text = tree.select(element)[0].get_text().replace('\"', '')
     except Exception as err:
         text = ''
-        writelog('    PARSE ERROR', element, err)
+        writelog('      PARSE ERROR', element, err)
     return text
 
 def to_int(text):
@@ -103,7 +111,7 @@ def select_attrib(tree, element, attrib):
         text = tree.select(element)[0][attrib]
     except Exception as err:
         text = ''
-        writelog('    PARSE ERROR', element, err)
+        writelog('     PARSE ERROR', element, err)
     return text
 
 def select_list(tree, element):
@@ -111,7 +119,7 @@ def select_list(tree, element):
         tags = [a.get_text().replace('\"', '') for a in tree.select(element)]
     except Exception as err:
         tags = []
-        writelog('    PARSE ERROR', element, err)
+        writelog('      PARSE ERROR', element, err)
     return tags
 
 def select_date(tree, element):
@@ -120,7 +128,7 @@ def select_date(tree, element):
         year = parser.parse(text).year
     except Exception as err:
         year = ''
-        writelog('    PARSE ERROR', element, err)
+        writelog('      PARSE ERROR', element, err)
     return year
 
 def parse(url, html):
@@ -141,7 +149,7 @@ def parse(url, html):
             'styles': select_list(tree, '.styles a')
         })
     except Exception as err:
-        writelog('    PARSE ERROR', url, err)
+        writelog('      PARSE ERROR', url, err)
     else:
         return album
 
@@ -200,14 +208,14 @@ def store(db, cursor, album, sitemap):
         cursor.execute(logquery)
 
         db.commit()
-        writelog('  Stored item', sitemap, album.url)
+        writelog('    Stored item', sitemap, album.url)
     except Exception as err:
-        writelog('    STORE ERROR item', sitemap, err)
+        writelog('      STORE ERROR item', sitemap, err)
 
-def run():
-    browser = get_browser()
+def collect(sitemaps, thread_num):
+    print('Beginning thread', thread_num, sitemaps)
     db, cursor = get_db()
-    sitemaps = get_sitemaps()[1:2]
+    browser = get_browser()
 
     for sitemap in sitemaps:
         urls = parse_sitemaps(cursor, sitemap)
@@ -216,8 +224,28 @@ def run():
             album = parse(url, html)
             store(db, cursor, album, sitemap)
 
-    close_db(db, cursor)
     browser.quit()
+    close_db(db, cursor)
+    print('Completed thread', thread_num)
+
+def sitemaps_for(sitemaps, mod, res):
+    return [s for i, s in enumerate(sitemaps) if i % mod == res]
+
+def run():
+    sitemaps = get_sitemaps()[28:30]
+
+    threads = []
+    thread_count = 2
+
+    for i in range(thread_count):
+        submaps = sitemaps_for(sitemaps, thread_count, i)
+        t = threading.Thread(target=collect, args=(submaps, i))
+        t.start()
+        threads.append(t)
+
+    for t in threads:
+        t.join()
+
     print('Process complete.  Exiting.')
 
 if __name__ == '__main__':

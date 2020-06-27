@@ -8,6 +8,7 @@ import os
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+import urllib.request
 
 import mysql.connector
 from mysql.connector import errorcode
@@ -33,7 +34,7 @@ def writelog(*msg):
         print('    ERROR Unexpected error, unable to log.')
 
 def get_db():
-    db = mysql.connector.connect(user='root', passwd='rootuser', database='music_collection')
+    db = mysql.connector.connect(user='root', passwd='rootuser', database='test_collection')
     return db, db.cursor()
 
 def close_db(db, cursor):
@@ -76,16 +77,18 @@ def parse_sitemaps(cursor, sitemap):
 def get_html(browser, url):
     errors = 0
     while errors < 3:
-        try:
-            browser.get(url)
-            html = browser.page_source
-        except Exception as err:
-            errors += 1
-            restart_browser(err)
-        else:
-            writelog('Connected to', url)
-            return html
+        with urllib.request.urlopen(url) as response:
+            try:
+                html = response.read().decode('utf-8')
 
+                print(html)
+
+            except Exception as err:
+                errors += 1
+                restart_browser(err)
+            else:
+                writelog('Connected to', url)
+                return html
 
 def select(tree, element):
     try:

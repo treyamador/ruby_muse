@@ -1,6 +1,4 @@
 
-DROP DATABASE IF EXISTS music_collection;
-CREATE DATABASE IF NOT EXISTS music_collection;
 use music_collection;
 
 CREATE TABLE IF NOT EXISTS albums (
